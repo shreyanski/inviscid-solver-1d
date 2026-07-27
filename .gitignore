@@ -1,0 +1,14 @@
+# compiled obj files
+*.obj
+*.o
+*.slo
+*.o
+
+# executable
+*.exe
+*.out
+*.app
+
+# build directories
+build/
+.vscode/
