@@ -9,6 +9,12 @@
 *.out
 *.app
 
+# undo history in vim
+*.un~
+
+# todo tasks 
+*.todo
+
 # build directories
 build/
 .vscode/
