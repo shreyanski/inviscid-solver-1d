@@ -3,31 +3,30 @@
 #include "../include/EulerSolver.h"
 
 int main() {
-  
-  // ConservedVector cell_1{2.5, 5.0, 10.0};
-  // ConservedVector cell_2{1.5, 3.0, 6.0};
-  // ConservedVector cell_sum = cell_1 + cell_2;
-  // ConservedVector cell_sub = cell_1 - cell_2;
-  // ConservedVector cell_scal = cell_1 * 10.0;
-  // std::cout << "Testing operator overloading for ConservedVector struct" << std::endl;
-  // std::cout << "\t Sum of cell densities: " << cell_sum.rho <<  " kg/m^3" << std::endl;
-  // std::cout << "\t Diff of cell energy densities: " << cell_sub.E << " J/m^3" << std::endl;
-  // std::cout << "\t Scaled cell momentum density: " << cell_scal.rhou << " kg/(m^2*s)" << std::endl;
 
-  std::cout << "========= CFD SOLVER SANITY CHECK============ " << std::endl;
+
   // Construct the solver
+  std::cout << "========= CFD SOLVER SANITY CHECK============ " << std::endl;
   int test_cells = 5;
   double test_length = 1.0;
-  EulerSolver test_solver(test_cells, test_length);
+  double test_time = 3.0;
+  double test_CFL = 1.0;
 
-  // Run the initialise member function
-  std::cout << "Initialising the simulation grid... " << std::endl;
-  test_solver.initialiseState();
+  std::cout << "--> Allocating memory for the grid of conserved vectors..." << std::endl;
+  EulerSolver debugger(test_cells, test_length);
+  std::cout << "--> Allocation successful!" << std::endl;
 
-  // Run the simulation 
-  test_solver.runSimulation(1.0);
-  std::cout << "==========  CFD WORKING IF YOU GOT HERE!  ===========" << std::endl;
 
-  
+  std::cout << "--> Initializing the simulation grid... " << std::endl;
+  debugger.initialiseState();
+  std::cout << "--> Initialization successful!" << std::endl;
+
+
+  // debugger.debug_U(test_cells);
+
+  std::cout << "--> Running the simulation..." << std::endl;
+  debugger.runSimulation(test_time, test_CFL);
+
+  std::cout << "==========  SUCCESS!!!  ===========" << std::endl;
   return 0;
 }
