@@ -76,7 +76,32 @@ void EulerSolver::runSimulation(double t_end, double CFL) {
       Ufaces[i][0] = U[i] - 0.5 * psi_left * du_i_minus_half;
       Ufaces[i][1] = U[i] + 0.5 * psi_right * du_i_plus_half;
 
+      // each interior shared face currently still has two U-values -> Rusanov flux for left & right faces?
+      ConservedVector flux_left = Ufaces[i-1][0];
+      ConservedVector flux_right = Ufaces[i][1];
 
+      auto rho_left = flux_left.rho;
+      auto rho_right = flux_right.rho;
+      auto u_left = flux_left.rhou / rho_left;
+      auto u_right = flux_right.rhou / rho_right;
+      auto P_left = conservedToPrimitive(flux_left).P;
+      auto P_right = conservedToPrimitive(flux_right).P;
+      auto E_left = flux_left.E;
+      auto E_right = flux_right.E;
+
+      
+      flux_left = {
+        rho_left * u_left,
+        P_left + rho_left * u_left * u_left,
+        u_left * (E_left + P_left)
+      };
+      flux_right = {
+        rho_right * u_right,
+        P_right + rho_right * u_right * u_right,
+        u_right * (E_right + P_right)
+      };
+
+      
 
     }
 

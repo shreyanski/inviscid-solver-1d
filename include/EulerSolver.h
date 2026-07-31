@@ -14,7 +14,7 @@ class EulerSolver {
     
     std::vector<ConservedVector> U;
     std::vector<std::array<ConservedVector, 2>> Ufaces;
-    std::vector<ConservedVector> F;
+    std::vector<ConservedVector> F; // use as flux vector 
    
   private:
     PrimitiveVector conservedToPrimitive(const ConservedVector& cons) const;
