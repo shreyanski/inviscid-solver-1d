@@ -7,10 +7,10 @@ int main() {
 
   // Construct the solver
   std::cout << "========= CFD SOLVER SANITY CHECK============ " << std::endl;
-  int test_cells = 5;
+  int test_cells = 100;
   double test_length = 1.0;
-  double test_time = 3.0;
-  double test_CFL = 1.0;
+  double test_time = 0.2;
+  double test_CFL = 0.1;
 
   std::cout << "--> Allocating memory for the grid of conserved vectors..." << std::endl;
   EulerSolver debugger(test_cells, test_length);
@@ -27,6 +27,6 @@ int main() {
   std::cout << "--> Running the simulation..." << std::endl;
   debugger.runSimulation(test_time, test_CFL);
 
-  std::cout << "==========  SUCCESS!!!  ===========" << std::endl;
+  std::cout << "==========  SUCCESS!!!  ===========\n";
   return 0;
 }

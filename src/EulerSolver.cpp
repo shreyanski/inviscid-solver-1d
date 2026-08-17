@@ -7,17 +7,21 @@
 #include "../include/EulerSolver.h"
 #include "../include/Variables.h"
 
-// Allocate memory & instantiate EulerSolver class (using constructor)
+// solver class constructor and initialiser
 EulerSolver::EulerSolver(int num_cells, double length) 
-: nx(num_cells), dx(length / num_cells), gamma(1.4) {
-  U.resize(nx);
-  
-} 
+: nx(num_cells), 
+  dx(length / num_cells),
+  gamma(1.4) ,
+  U(nx),
+  Ufaces(nx), // coupled face indices and cell indices (nx cells means nx+1 faces)
+  Ffaces(nx)
+{ 
+};
 
 // Sod-shock problem initialisation of primitive variables
 void EulerSolver::initialiseState() {
-  // initialise the conserved variable vector (using the primitive)
-  for (int i=0; i<nx-1; ++i) {
+  
+  for (int i=0; i<nx; ++i) {
     if (i < nx/2) {
       PrimitiveVector prim_left{1.225, 0.0, 1.0};
       U[i] = primitiveToConserved(prim_left);
@@ -26,27 +30,22 @@ void EulerSolver::initialiseState() {
       U[i] = primitiveToConserved(prim_right);
     }
 
-    // debug
-    // std::cout << "Cell "<< i << " density: " << "rho = " << U[i].rho << std::endl;
-  
   }
   
 };
 
 // Simulation execution method
 void EulerSolver::runSimulation(double t_end, double CFL) {
-  double t {0.0};
-  double dt {0.0};
-  
+  double t{0.0}, dt{0.0};
+  int iter{0};
+
   while (t < t_end) {
     
-    // 1. Compute timestep based on CFL & max wavespeed globally (across all cells)
+    // ALLOWABLE TIMESTEP BASED ON CFL AND JACOBIAN
     auto Uold = U;
-    double u {0.0};
-    double a {0.0};
-    double a_max {0.0};
+    double u{0.0}, a{0.0}, a_max{0.0};
     for (int i=0; i<nx; i++) {
-      a = computeWaveSpeed(U[i]);
+      a = computeWaveSpeedLocal(U[i]);
       u = conservedToPrimitive(U[i]).u;
 
       if (a + std::fabs(u) > a_max) {
@@ -56,112 +55,113 @@ void EulerSolver::runSimulation(double t_end, double CFL) {
     dt = CFL * dx / a_max;
 
     
-    // 2. Applying MUSCL scheme to interpolate conserved variables at cell centers to faces --> remember that each cell needs to interpolate twice (2 faces)
-    
-    // use low-order scheme at boundary cells [0] and [nx-1]
-    Ufaces[0][0] = U[0];
-    Ufaces[0][1] = U[0];
+    // APPLYING MUSCL INTERPOLATION SCHEME 
+    // use low-order scheme for faces at boundary cells [0] and [nx-1]
+    Ufaces[0][0] = U[0]; // second index references selected face (left or right face)
+    Ufaces[0][1] = U[0]; 
     Ufaces[nx-1][0] = U[nx-1];
     Ufaces[nx-1][1] = U[nx-1];
-    Ffaces = Ufaces;
-    
-    // 3. Solving the Riemann problem
     ConservedVector epsilon {1e-8};
-    // use higher-order scheme for interior faces
+    // use higher-order scheme for interior grid faces
     for (int i=1; i<nx-1; i++) {
-      // smoothness indicator calculation
-      auto du_i_plus_half = U[i+1] - U[i]; // return type should be ConservedVector (contains rho, rhou, E)
+      // calculate smoothness indicator 
+      auto du_i_plus_half = U[i+1] - U[i]; // return type is ConservedVector (contains rho, rhou, E variables)
       auto du_i_minus_half = U[i] - U[i-1]; 
-      auto r_left = du_i_minus_half / (du_i_plus_half + epsilon);
-      auto r_right = du_i_plus_half / (du_i_minus_half + epsilon); // return type is ConservedVector still? 
+      auto rL = du_i_minus_half / (du_i_plus_half + epsilon);
+      auto rR = du_i_plus_half / (du_i_minus_half + epsilon); 
 
       // apply van Leer limiter
-      ConservedVector r_left_fabs = fabs(r_left);
-      ConservedVector psi_left = (r_left + r_left_fabs) / (ConservedVector{1.0,1.0,1.0} + r_left_fabs);
-      ConservedVector r_right_fabs = fabs(r_right);
-      ConservedVector psi_right = (r_right + r_right_fabs) / (ConservedVector{1.0,1.0,1.0} + r_right_fabs);
+      ConservedVector psiL = (rL + fabs(rL)) / (ConservedVector{1.0,1.0,1.0} + fabs(rL));
+      ConservedVector psiR = (rR + fabs(rR)) / (ConservedVector{1.0,1.0,1.0} + fabs(rR));
 
-      Ufaces[i][0] = U[i] - 0.5 * psi_left * du_i_minus_half;
-      Ufaces[i][1] = U[i] + 0.5 * psi_right * du_i_plus_half;
+      // conserved variables at faces for each cell i
+      Ufaces[i][0] = U[i] - 0.5 * psiL * du_i_minus_half;
+      Ufaces[i][1] = U[i] + 0.5 * psiR * du_i_plus_half;
+    }
+    
+    // each interior face currently has two U-values associated (face is shared w/ two cells)
+    for (int i=1; i<=nx-1; i++) {
 
-      // each interior shared face currently still has two U-values -> Rusanov flux for left & right faces?
-      ConservedVector q_left = Ufaces[i-1][1];
-      ConservedVector q_right = Ufaces[i][0];
+      ConservedVector qL = Ufaces[i-1][1]; // right face of previous cell
+      ConservedVector qR = Ufaces[i][0];   // left face of current cell
 
-      auto rho_left = q_left.rho;
-      auto rho_right = q_right.rho;
-      auto u_left = q_left.rhou / rho_left;
-      auto u_right = q_right.rhou / rho_right;
-      auto P_left = conservedToPrimitive(q_left).P;
-      auto P_right = conservedToPrimitive(q_right).P;
-      auto E_left = q_left.E;
-      auto E_right = q_right.E;
-
+      auto rhoL = qL.rho;
+      auto rhoR = qR.rho;
+      auto uL = qL.rhou / rhoL;
+      auto uR = qR.rhou / rhoR;
+      auto PL = conservedToPrimitive(qL).P;
+      auto PR = conservedToPrimitive(qR).P;
+      auto EL = qL.E;
+      auto ER = qR.E;
+      auto aL = computeWaveSpeedLocal(qL);
+      auto aR = computeWaveSpeedLocal(qR);
       
-      ConservedVector flux_left = {
-        rho_left * u_left,
-        P_left + rho_left * u_left * u_left,
-        u_left * (E_left + P_left)
+      ConservedVector fluxL = {
+        rhoL * uL,
+        PL + rhoL * uL * uL,
+        uL * (EL + PL)
       };
-      ConservedVector flux_right = {
-        rho_right * u_right,
-        P_right + rho_right * u_right * u_right,
-        u_right * (E_right + P_right)
+      ConservedVector fluxR = {
+        rhoR * uR,
+        PR+ rhoR * uR * uR,
+        uR * (ER + PR)
       };
 
       // need to consolidate these two fluxes into a single flux (for each face i)
-      auto S_max = std::max(std::fabs(u_left) + computeWaveSpeed(q_left), std::fabs(u_right) + computeWaveSpeed(q_right));
-      Ffaces[i-1][1] = 0.5 * (flux_left + flux_right) - S_max * (q_right - q_left);
-      Ffaces[i][0] = 0.5 * (flux_left + flux_right) - S_max * (q_right - q_left);
-
-      U[i] = Uold[i] - (dt/dx) * (Ffaces[i][1] - Ffaces[i][0]);
+      auto S_max = std::max(std::fabs(uL) + aL, std::fabs(uR) + aR);
+      ConservedVector flux_rusanov = 0.5 * (fluxL + fluxR) - 0.5 * S_max * (qR - qL);
+      Ffaces[i-1][1] = flux_rusanov; // right face of cell i-1
+      Ffaces[i][0] = flux_rusanov; // left face of cell i
+      
     }
 
+    // fluxes at boundary faces (leftmost & rightmost) -> compute from conserved variables at faces
+    ConservedVector qL_bound = Ufaces[0][0];
+    auto primL_bound = conservedToPrimitive(qL_bound);
+    Ffaces[0][0] = {qL_bound.rhou,
+                    primL_bound.P + qL_bound.rhou * primL_bound.u, 
+                    primL_bound.u * (qL_bound.E + primL_bound.P)};
+    ConservedVector qR_bound = Ufaces[nx-1][1];
+    auto primR_bound = conservedToPrimitive(qR_bound);
+    Ffaces[nx-1][1] = {qR_bound.rhou,
+                       primR_bound.P + qR_bound.rhou * primR_bound.u,
+                       primR_bound.u * (qR_bound.E + primR_bound.P)};
+    
+            
+    for (int i=0; i<nx; i++) {
+      U[i] = Uold[i] - (dt/dx) * (Ffaces[i][1] - Ffaces[i][0]);
+    }
     // update boundary conditions
     U[0] = U[1];
     U[nx-1] = U[nx-2];
+    
+    t+=dt;
+    iter++; 
 
 
     // write to file for csv post-processing
     std::ofstream outputFile;
-
-    std::ostringstream timestepTemp, gridstepTemp;
-    timestepTemp << std::setfill('0') << std::setw(6);
-    timestepTemp << dt;
-    auto timestep = timestepTemp.str();
-
-  
-    gridstepTemp << std::setfill('0') << std::setw(6);
-    gridstepTemp << nx;
-    auto grid = gridstepTemp.str();
-
-    outputFile.open("Solution_" + grid + "_" + timestep + ".csv");
-    outputFile << "x,rho,u,P" << std::endl;
-    for (int i=0; i<nx; i++) {
-      outputFile << i << "," << U[i].rho << "," << conservedToPrimitive(U[i]).u << "," << conservedToPrimitive(U[i]).P << std::endl;
+    // Only save structural CSV profiles occasionally (e.g., every 50 steps)
+    if (iter % 10 == 0 || t >= t_end) {
+      std::ofstream outputFile("Solution_Iter_" + std::to_string(iter) + ".csv");
+      outputFile << "x,rho,u,P\n"; // Using short strings over slow std::endl
+      for (int i = 0; i < nx; i++) {
+          auto prim = conservedToPrimitive(U[i]);
+          outputFile << i * dx << "," << U[i].rho << "," << prim.u << "," << prim.P << "\n";
+      }
+      outputFile.close();
     }
-    outputFile.close();
-    std::cout << "Current time: " << std::scientific << std::setw(10) << std::setprecision(3) << t;
-    std::cout << ", End time: " << std::scientific << std::setw(10) << std::setprecision(3) << t_end;
-    std::cout << ", Current timestep: " << std::fixed << std::setw(7) << dt;
-    std::cout << "\r";
 
-    t+=dt;
+  //  // Print active tracking diagnostics cleanly to the console terminal
+  //   std::cout << "Time: " << std::scientific << std::setprecision(3) << t 
+  //             << " | Step: " << std::fixed << std::setprecision(5) << dt 
+  //             << " | Max Wave Speed: " << a_max << "\r" << std::flush;
+  
+
   }
- 
 
+   
 };
-
-// debug size and type of U
-void EulerSolver::debug_grid() {
-    
-  // std::cout << Ufaces << std::endl;
-    
-}
-
-
-
-
 
 
 
@@ -202,7 +202,7 @@ ConservedVector EulerSolver::evaluateCellFlux(const ConservedVector& cons) const
   return flux; 
 }
 
-double EulerSolver::computeWaveSpeed(const ConservedVector& cons)  const {
+double EulerSolver::computeWaveSpeedLocal(const ConservedVector& cons)  const {
   PrimitiveVector prim = conservedToPrimitive(cons);
   // only need speed of sound value in flux interface solver method (just return speed value here)
   return std::sqrt(gamma * prim.P / cons.rho);

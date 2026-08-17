@@ -19,8 +19,9 @@ class EulerSolver {
   private:
     PrimitiveVector conservedToPrimitive(const ConservedVector& cons) const;
     ConservedVector primitiveToConserved(const PrimitiveVector& prim) const;
+
+    double computeWaveSpeedLocal(const ConservedVector& cons) const;
     ConservedVector evaluateCellFlux(const ConservedVector& cellflux) const;
-    double computeWaveSpeed(const ConservedVector& cons) const;
     ConservedVector evaluateFaceFlux(const ConservedVector& cons_left, const ConservedVector& cons_right) const;
 
 
@@ -30,7 +31,6 @@ class EulerSolver {
     void initialiseState();
     void runSimulation(double t_end, double CFL);
 
-    void debug_grid();
 
 };
 

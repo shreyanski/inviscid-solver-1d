@@ -42,7 +42,7 @@ inline ConservedVector operator*(const ConservedVector& cons, double scalar) {
   };
 }
 inline ConservedVector operator*(double scalar, const ConservedVector& cons) {
-  return cons * scalar; // resuse the function above since its commutative
+  return cons * scalar; // reuse the function above since its commutative
 }
 
 // allow fabs to accept user-defined data type (defining it in the same namespace as ConservedVector)
