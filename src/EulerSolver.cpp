@@ -61,9 +61,9 @@ void EulerSolver::runSimulation(double t_end, double CFL) {
     Ufaces[0][1] = U[0]; 
     Ufaces[nx-1][0] = U[nx-1];
     Ufaces[nx-1][1] = U[nx-1];
-    ConservedVector epsilon {1e-8};
+    ConservedVector epsilon {1e-8, 1e-8, 1e-8};
     // use higher-order scheme for interior grid faces
-    for (int i=1; i<nx-1; i++) {
+    for (int i=1; i<nx-1; i++) { // loops over interior cells
       // calculate smoothness indicator 
       auto du_i_plus_half = U[i+1] - U[i]; // return type is ConservedVector (contains rho, rhou, E variables)
       auto du_i_minus_half = U[i] - U[i-1]; 
@@ -77,10 +77,29 @@ void EulerSolver::runSimulation(double t_end, double CFL) {
       // conserved variables at faces for each cell i
       Ufaces[i][0] = U[i] - 0.5 * psiL * du_i_minus_half;
       Ufaces[i][1] = U[i] + 0.5 * psiR * du_i_plus_half;
-    }
+
+      // DEBUGGING
+      std::cout << "Ufaces_WEST_of_PREV: " << "ITER_" + std::to_string(iter) + 
+      "_xi_" + std::to_string(i) << " --> " + 
+      std::to_string(Ufaces[i][0].rho) << "\t" << std::to_string(Ufaces[i][0].rhou)
+      << "\t" << std::to_string(Ufaces[i][0].E) << std::endl;
+
+    } // end loop over interior cells
     
+    // fluxes at boundary faces (leftmost & rightmost) -> compute from conserved variables at faces
+    ConservedVector qL_bound = Ufaces[0][0];
+    auto primL_bound = conservedToPrimitive(qL_bound);
+    Ffaces[0][0] = {qL_bound.rhou,
+                    primL_bound.P + qL_bound.rhou * primL_bound.u, 
+                    primL_bound.u * (qL_bound.E + primL_bound.P)};
+    ConservedVector qR_bound = Ufaces[nx-1][1];
+    auto primR_bound = conservedToPrimitive(qR_bound);
+    Ffaces[nx-1][1] = {qR_bound.rhou,
+                       primR_bound.P + qR_bound.rhou * primR_bound.u,
+                       primR_bound.u * (qR_bound.E + primR_bound.P)};
+
     // each interior face currently has two U-values associated (face is shared w/ two cells)
-    for (int i=1; i<=nx-1; i++) {
+    for (int i=1; i<=nx-1; i++) { // loops over interior 
 
       ConservedVector qL = Ufaces[i-1][1]; // right face of previous cell
       ConservedVector qR = Ufaces[i][0];   // left face of current cell
@@ -95,7 +114,8 @@ void EulerSolver::runSimulation(double t_end, double CFL) {
       auto ER = qR.E;
       auto aL = computeWaveSpeedLocal(qL);
       auto aR = computeWaveSpeedLocal(qR);
-      
+    
+
       ConservedVector fluxL = {
         rhoL * uL,
         PL + rhoL * uL * uL,
@@ -107,25 +127,32 @@ void EulerSolver::runSimulation(double t_end, double CFL) {
         uR * (ER + PR)
       };
 
+      // DEBUGGING
+      std::cout << "Ufaces_WEST_PREV: " << "ITER_" + std::to_string(iter) + 
+      "_xi_" + std::to_string(i) << " --> ( " +
+      std::to_string(Ufaces[i][1].rho) + " , " + std::to_string(Ufaces[i][1].rhou)
+      + " , " + std::to_string(Ufaces[0][1].E) + " )" << std::endl;
+
       // need to consolidate these two fluxes into a single flux (for each face i)
       auto S_max = std::max(std::fabs(uL) + aL, std::fabs(uR) + aR);
+
+      // // DEBUGGING
+      // std::cout << "(global) current S_max: " << "ITER_" + std::to_string(iter) + 
+      // "_xi_" + std::to_string(i) +
+      // " --> " + std::to_string(S_max) << std::endl;
+
       ConservedVector flux_rusanov = 0.5 * (fluxL + fluxR) - 0.5 * S_max * (qR - qL);
       Ffaces[i-1][1] = flux_rusanov; // right face of cell i-1
       Ffaces[i][0] = flux_rusanov; // left face of cell i
+
+      // DEBUGGING
+      std::cout << "Ffaces_DENS_EAST_of_prev: ITER_" + std::to_string(iter) + 
+      "_xi_" + std::to_string(i) + " --> " +
+      std::to_string(Ffaces[i-1][1].rho) << std::endl;
       
     }
 
-    // fluxes at boundary faces (leftmost & rightmost) -> compute from conserved variables at faces
-    ConservedVector qL_bound = Ufaces[0][0];
-    auto primL_bound = conservedToPrimitive(qL_bound);
-    Ffaces[0][0] = {qL_bound.rhou,
-                    primL_bound.P + qL_bound.rhou * primL_bound.u, 
-                    primL_bound.u * (qL_bound.E + primL_bound.P)};
-    ConservedVector qR_bound = Ufaces[nx-1][1];
-    auto primR_bound = conservedToPrimitive(qR_bound);
-    Ffaces[nx-1][1] = {qR_bound.rhou,
-                       primR_bound.P + qR_bound.rhou * primR_bound.u,
-                       primR_bound.u * (qR_bound.E + primR_bound.P)};
+
     
             
     for (int i=0; i<nx; i++) {

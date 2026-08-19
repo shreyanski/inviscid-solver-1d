@@ -8,6 +8,7 @@ struct PrimitiveVector {
   double rho  = 1.225;
   double u    = 0.0;
   double P    = 1.01325; // pressure
+
 };
 
 // data structure to hold the conserved variables

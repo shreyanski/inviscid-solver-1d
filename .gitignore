@@ -18,3 +18,10 @@
 # build directories
 build/
 .vscode/
+
+# debug logs and linker files
+*.ilk
+*.pdb
+
+# solution results (for now leave out)
+*.csv
