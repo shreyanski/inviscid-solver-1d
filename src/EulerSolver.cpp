@@ -6,6 +6,7 @@
 #include <functional>
 #include "../include/EulerSolver.h"
 #include "../include/Variables.h"
+#include "../include/FluxSolver.h"
 
 // solver class constructor and initialiser
 EulerSolver::EulerSolver(int num_cells, double length) 
@@ -34,6 +35,91 @@ void EulerSolver::initialiseState() {
   
 };
 
+// std::tuple<ConservedVector, ConservedVector> EulerSolver::FluxSolver::interpolate_MUSCL(EulerSolver& solv) {
+//   int nx = solv.nx;
+//   double dx = solv.dx;
+//   double gamma = solv.gamma;
+//   std::vector<ConservedVector> U = solv.U;
+//   std::vector<std::array<ConservedVector,2>> Ufaces = solv.Ufaces;
+//   std::vector<std::array<ConservedVector,2>> Ffaces = solv.Ffaces;
+  
+
+//     // APPLYING MUSCL INTERPOLATION SCHEME 
+//     // use low-order scheme for faces at boundary cells [0] and [nx-1]
+//     Ufaces[0][0] = U[0]; // second index references selected face (left or right face)
+//     Ufaces[0][1] = U[0]; 
+//     Ufaces[nx-1][0] = U[nx-1];
+//     Ufaces[nx-1][1] = U[nx-1];
+//     ConservedVector epsilon {1e-8, 1e-8, 1e-8};
+//     // use higher-order scheme for interior grid faces
+//     for (int i=1; i<nx-1; i++) { // loops over interior cells
+//       // calculate smoothness indicator 
+//       auto du_i_plus_half = U[i+1] - U[i]; // return type is ConservedVector (contains rho, rhou, E variables)
+//       auto du_i_minus_half = U[i] - U[i-1]; 
+//       auto rL = du_i_minus_half / (du_i_plus_half + epsilon);
+//       auto rR = du_i_plus_half / (du_i_minus_half + epsilon); 
+
+//       // apply van Leer limiter
+//       ConservedVector psiL = (rL + fabs(rL)) / (ConservedVector{1.0,1.0,1.0} + fabs(rL));
+//       ConservedVector psiR = (rR + fabs(rR)) / (ConservedVector{1.0,1.0,1.0} + fabs(rR));
+
+//       // conserved variables at faces for each cell i
+//       Ufaces[i][0] = U[i] - 0.5 * psiL * du_i_minus_half;
+//       Ufaces[i][1] = U[i] + 0.5 * psiR * du_i_plus_half;
+
+//       // // DEBUGGING
+//       // std::cout << "Ufaces_WEST_of_PREV: " << "ITER_" + std::to_string(iter) + 
+//       // "_xi_" + std::to_string(i) << " --> " + 
+//       // std::to_string(Ufaces[i][0].rho) << "\t" << std::to_string(Ufaces[i][0].rhou)
+//       // << "\t" << std::to_string(Ufaces[i][0].E) << std::endl;
+
+//     } // end loop over interior cells
+    
+//     // fluxes at boundary faces (leftmost & rightmost) -> compute from conserved variables at faces
+//     ConservedVector qL_bound = Ufaces[0][0];
+//     auto primL_bound = solv.conservedToPrimitive(qL_bound);
+//     Ffaces[0][0] = {qL_bound.rhou,
+//                     primL_bound.P + qL_bound.rhou * primL_bound.u, 
+//                     primL_bound.u * (qL_bound.E + primL_bound.P)};
+//     ConservedVector qR_bound = Ufaces[nx-1][1];
+//     auto primR_bound = solv.conservedToPrimitive(qR_bound);
+//     Ffaces[nx-1][1] = {qR_bound.rhou,
+//                        primR_bound.P + qR_bound.rhou * primR_bound.u,
+//                        primR_bound.u * (qR_bound.E + primR_bound.P)};
+
+//     // each interior face currently has two U-values associated (face is shared w/ two cells)
+//     for (int i=1; i<=nx-1; i++) { // loops over interior 
+
+//       ConservedVector qL = Ufaces[i-1][1]; // right face of previous cell
+//       ConservedVector qR = Ufaces[i][0];   // left face of current cell
+
+//       auto rhoL = qL.rho;
+//       auto rhoR = qR.rho;
+//       auto uL = qL.rhou / rhoL;
+//       auto uR = qR.rhou / rhoR;
+//       auto PL = solv.conservedToPrimitive(qL).P;
+//       auto PR = solv.conservedToPrimitive(qR).P;
+//       auto EL = qL.E;
+//       auto ER = qR.E;
+//       auto aL = solv.computeWaveSpeedLocal(qL);
+//       auto aR = solv.computeWaveSpeedLocal(qR);
+    
+
+//       ConservedVector fluxL = {
+//         rhoL * uL,
+//         PL + rhoL * uL * uL,
+//         uL * (EL + PL)
+//       };
+//       ConservedVector fluxR = {
+//         rhoR * uR,
+//         PR+ rhoR * uR * uR,
+//         uR * (ER + PR)
+//       };
+
+//       return {fluxL, fluxR, qL, qR};
+// };
+
+
 // Simulation execution method
 void EulerSolver::runSimulation(double t_end, double CFL) {
   double t{0.0}, dt{0.0};
@@ -54,7 +140,9 @@ void EulerSolver::runSimulation(double t_end, double CFL) {
     }
     dt = CFL * dx / a_max;
 
-    
+    // FluxSolver flux;
+    // [ConservedVector fluxL, ConservedVector fluxR, ConservedVector qL, ConservedVector qR] = flux.interpolate_MUSCL(*this);
+
     // APPLYING MUSCL INTERPOLATION SCHEME 
     // use low-order scheme for faces at boundary cells [0] and [nx-1]
     Ufaces[0][0] = U[0]; // second index references selected face (left or right face)
@@ -150,34 +238,26 @@ void EulerSolver::runSimulation(double t_end, double CFL) {
       "_xi_" + std::to_string(i) + " --> " +
       std::to_string(Ffaces[i-1][1].rho) << std::endl;
       
-    }
+    } // end for loop 
 
 
     
             
-    for (int i=0; i<nx; i++) {
-      U[i] = Uold[i] - (dt/dx) * (Ffaces[i][1] - Ffaces[i][0]);
-    }
-    // update boundary conditions
-    U[0] = U[1];
-    U[nx-1] = U[nx-2];
-    
-    t+=dt;
-    iter++; 
+  for (int i=0; i<nx; i++) {
+    U[i] = Uold[i] - (dt/dx) * (Ffaces[i][1] - Ffaces[i][0]);
+  }
+  // update boundary conditions
+  U[0] = U[1];
+  U[nx-1] = U[nx-2];
+  
+  t+=dt;
+  iter++; 
 
 
-    // write to file for csv post-processing
-    std::ofstream outputFile;
-    // Only save structural CSV profiles occasionally (e.g., every 50 steps)
-    if (iter % 10 == 0 || t >= t_end) {
-      std::ofstream outputFile("Solution_Iter_" + std::to_string(iter) + ".csv");
-      outputFile << "x,rho,u,P\n"; // Using short strings over slow std::endl
-      for (int i = 0; i < nx; i++) {
-          auto prim = conservedToPrimitive(U[i]);
-          outputFile << i * dx << "," << U[i].rho << "," << prim.u << "," << prim.P << "\n";
-      }
-      outputFile.close();
-    }
+  // write to file for csv post-processing
+  writePrimitiveVariables(U, iter, t, t_end);
+
+
 
   //  // Print active tracking diagnostics cleanly to the console terminal
   //   std::cout << "Time: " << std::scientific << std::setprecision(3) << t 
@@ -185,10 +265,12 @@ void EulerSolver::runSimulation(double t_end, double CFL) {
   //             << " | Max Wave Speed: " << a_max << "\r" << std::flush;
   
 
-  }
+  } // end while loop
 
    
 };
+
+
 
 
 
@@ -240,3 +322,20 @@ double EulerSolver::computeWaveSpeedLocal(const ConservedVector& cons)  const {
 
   
 // }
+
+// finally write the solution to .csv files
+void EulerSolver::writePrimitiveVariables(const std::vector<ConservedVector>& prim, int iter, double t, double t_end) {
+    // write to file for csv post-processing
+    std::ofstream outputFile;
+    // Only save structural CSV profiles occasionally (e.g., every 50 steps)
+    if (iter % 50 == 0 || t >= t_end) {
+      std::ofstream outputFile("build/Primitive_Iter_" + std::to_string(iter) + ".csv");
+      outputFile << "x,rho,u,P\n"; // Using short strings over slow std::endl
+      for (int i = 0; i < nx; i++) {
+          auto prim = conservedToPrimitive(U[i]);
+          outputFile << i * dx << "," << U[i].rho << "," << prim.u << "," << prim.P << "\n";
+      }
+      outputFile.close();
+    }
+  }
+

@@ -19,17 +19,25 @@ class EulerSolver {
   private:
     PrimitiveVector conservedToPrimitive(const ConservedVector& cons) const;
     ConservedVector primitiveToConserved(const PrimitiveVector& prim) const;
-
     double computeWaveSpeedLocal(const ConservedVector& cons) const;
     ConservedVector evaluateCellFlux(const ConservedVector& cellflux) const;
     ConservedVector evaluateFaceFlux(const ConservedVector& cons_left, const ConservedVector& cons_right) const;
+    void writePrimitiveVariables(const std::vector<ConservedVector>& cons, int iter, double t_current, double t_end);
 
-
-
+    
+    
+    
   public:
-    EulerSolver(int num_cells, double length); // constructor
-    void initialiseState();
-    void runSimulation(double t_end, double CFL);
+  EulerSolver(int num_cells, double length); // constructor
+  void initialiseState();
+  class FluxSolver {
+    public:
+      std::tuple<ConservedVector, ConservedVector, ConservedVector, ConservedVector> interpolate_MUSCL(EulerSolver& solv);
+    
+      void limiter_vanLeer();
+  };
+  void runSimulation(double t_end, double CFL);
+  
 
 
 };
