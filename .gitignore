@@ -19,6 +19,9 @@
 build/
 .vscode/
 
+# python virtual env for post-processing
+results/
+
 # debug logs and linker files
 *.ilk
 *.pdb

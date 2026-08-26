@@ -268,7 +268,7 @@ void EulerSolver::runSimulation(double t_end, double CFL) {
   } // end while loop
 
    
-};
+}; // end EulerSolver::runSimulation()
 
 
 
